@@ -4,3 +4,7 @@
 
 ## Диаграмма классов
 <img src="out\schema\IDictionary.png" alt="схема">
+
+### Зависимости от других репозиториев
+* [SysEnumerators](https://github.com/mazzy-ax/SysEnumerators)
+* [ICollection](https://github.com/d-tolstov/Ax2009-ICollection)
