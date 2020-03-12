@@ -1,0 +1,41 @@
+@startuml "IDictionary"
+
+interface Enumerable{
+    GetEnumerator() : Enumerator
+}
+
+interface IDictionary{
+    Add(anytype key, anytype value) : IDictionary
+    Count() : int
+    ContainsKey(anytype key) : boolean
+    Remove(anytype key) : IDictionary
+    GetEnumerator() : ISysEnumerator
+    Keys() : ICollection
+    Values() : ICollection
+}
+Enumerable <|-- IDictionary
+
+class SysMap{
+    Add(anytype key, anytype value) : SysMap
+    Remove(anytype key) : SysMap
+}
+IDictionary <|.. SysMap
+
+class Map{
+}
+SysMap o-- Map
+
+class SysIDictionaryCLR{
+    Add(anytype key, anytype value) : SysIDictionaryCLR
+    Remove(anytype key) : SysIDictionaryCLR
+}
+IDictionary <|.. SysIDictionaryCLR
+
+package System.Collections.Generic{
+    interface IDictionary(T){
+    }
+    SysIDictionaryCLR o-- "IDictionary(T)"
+    "Dictionary(T)" .|> "IDictionary(T)"
+}
+
+@enduml
