@@ -31,11 +31,35 @@ class SysIDictionaryCLR{
 }
 IDictionary <|.. SysIDictionaryCLR
 
-package System.Collections.Generic{
-    interface IDictionary(T){
-    }
-    SysIDictionaryCLR o-- "IDictionary(T)"
-    "Dictionary(T)" .|> "IDictionary(T)"
+interface IStruct{
+    Add(str key, anytype value) : IStruct
+    ContainsKey(str key) : boolean
+    Remove(str key) : IStruct
 }
+IDictionary <|- IStruct
+
+class SysStructCLR{
+    Add(str key, anytype value) : SysStructCLR
+    Remove(str key) : SysStructCLR
+}
+IStruct <|.. SysStructCLR
+
+package System.Collections.Generic{
+    interface IDictionary(TKey,TValue){
+    }
+    SysIDictionaryCLR o-- "IDictionary(TKey,TValue)"
+    "IDictionary(TKey,TValue)" <|. "Dictionary(TKey,TValue)"
+    SysStructCLR o-- "Dictionary(TKey,TValue)"
+}
+
+class SysStruct{
+    Add(str key, anytype value) : SysStruct
+    Remove(str key) : SysStruct
+}
+IStruct <|.. SysStruct
+
+class Struct{
+}
+SysStruct o-- Struct
 
 @enduml
