@@ -9,3 +9,4 @@
 ### Зависимости от других репозиториев
 * [SysEnumerators](https://github.com/mazzy-ax/SysEnumerators)
 * [ICollection](https://github.com/d-tolstov/Ax2009-ICollection)
+* [SysJSONConvert](https://github.com/d-tolstov/Ax2009-SysJSONConvert)
