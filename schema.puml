@@ -8,6 +8,7 @@ interface IDictionary{
     Add(anytype key, anytype value) : IDictionary
     Count() : int
     ContainsKey(anytype key) : boolean
+    Item(anytype key) : anytype
     Remove(anytype key) : IDictionary
     GetEnumerator() : ISysEnumerator
     Keys() : ICollection
@@ -34,9 +35,10 @@ IDictionary <|.. SysIDictionaryCLR
 interface IStruct{
     Add(str key, anytype value) : IStruct
     ContainsKey(str key) : boolean
+    Item(str key) : anytype
     Remove(str key) : IStruct
 }
-IDictionary <|- IStruct
+Enumerable <|- IStruct
 
 class SysStructCLR{
     Add(str key, anytype value) : SysStructCLR
@@ -50,6 +52,18 @@ package System.Collections.Generic{
     SysIDictionaryCLR o-- "IDictionary(TKey,TValue)"
     "IDictionary(TKey,TValue)" <|. "Dictionary(TKey,TValue)"
     SysStructCLR o-- "Dictionary(TKey,TValue)"
+}
+
+class SysHashtableCLR{
+    Add(str key, anytype value) : SysHashtableCLR
+    Remove(str key) : SysHashtableCLR
+}
+IStruct <|.. SysHashtableCLR
+
+package System.Collections{
+    class Hashtable{
+    }
+    SysHashtableCLR o-- Hashtable
 }
 
 class SysStruct{

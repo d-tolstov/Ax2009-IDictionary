@@ -239,11 +239,7 @@ Formatversion: 1
         #;
         #    perm.assert();
         #
-        #    SysCLRReflection::invokeMethod(
-        #        dictionary
-        #      , "Add"
-        #      , SysCLRReflection::getArray( this.getObjectForAnyType(key), this.getObjectForAnyType(value))
-        #    );
+        #    dictionary.Add( this.getObjectForAnyType(key), this.getObjectForAnyType(value));
         #
         #    CodeAccessPermission::revertAssert();
         #
@@ -253,13 +249,17 @@ Formatversion: 1
       SOURCE #_ContainsKey
         #protected boolean _ContainsKey(anytype key)
         #{
+        #    boolean ret;
+        #;
         #    new InteropPermission(InteropKind::ClrInterop).assert();
         #
-        #    return SysCLRReflection::invokeMethod(
+        #    ret = SysCLRReflection::invokeMethod(
         #        dictionary
         #      , "ContainsKey"
         #      , SysCLRReflection::getArray( this.getObjectForAnyType(key))
         #    );
+        #
+        #    return ret;
         #}
       ENDSOURCE
       SOURCE #_Item
@@ -271,11 +271,7 @@ Formatversion: 1
         #;
         #    new InteropPermission(InteropKind::ClrInterop).assert();
         #
-        #    ret = SysCLRReflection::getPropertyValueIndex(
-        #        dictionary
-        #      , "Item"
-        #      , this.getObjectForAnyType(key)
-        #    );
+        #    ret = dictionary.get_Item( this.getObjectForAnyType(key));
         #
         #    return this.getAnytypeForObject( ret);
         #}
@@ -288,11 +284,7 @@ Formatversion: 1
         #;
         #    new InteropPermission(InteropKind::ClrInterop).assert();
         #
-        #    SysCLRReflection::invokeMethod(
-        #        dictionary
-        #      , "Remove"
-        #      , SysCLRReflection::getArray( this.getObjectForAnyType(key))
-        #    );
+        #    dictionary.Remove( this.getObjectForAnyType(key));
         #
         #    return this;
         #}
@@ -311,7 +303,7 @@ Formatversion: 1
         #/// </remarks>
         #class SysIDictionaryCLR
         #{
-        #    System.Collections.IEnumerable  dictionary;
+        #    System.Collections.IDictionary  dictionary;
         #    // Тип словаря
         #    System.Type                     dictionaryType;
         #    str                             dictionaryTypeName;
@@ -323,13 +315,29 @@ Formatversion: 1
         #    str                             valueTypeName;
         #}
       ENDSOURCE
-      SOURCE #Comparer
-        #System.Object Comparer()
+      SOURCE #classIdHasMethod
+        ##define.classIdHasMethodKey("classIdHasMethodKey")
+        #protected boolean classIdHasMethod(
+        #    int     _classId
+        #  , str     _methodName
+        #)
         #{
-        #    return SysCLRReflection::getPropertyValue(
-        #        this.dictionary()
-        #      , "Comparer"
-        #    );
+        #    SysGlobalCache  globalCache = appl.globalCache();
+        #    str             key;
+        #    boolean         ret;
+        #;
+        #    key = #classIdHasMethodKey + "_" + int2str(_classId) + "_" + _methodName;
+        #
+        #    if ( !globalCache.isSet("", key))
+        #    {
+        #        ret = new SysDictClass(_classId).hasObjectMethod(_methodName);
+        #
+        #        globalCache.set( "", key, ret);
+        #    }
+        #    else
+        #        ret = globalCache.get( "", key);
+        #
+        #    return ret;
         #}
       ENDSOURCE
       SOURCE #Count
@@ -381,6 +389,8 @@ Formatversion: 1
         #protected anytype getAnytypeForObject(System.Object object)
         #{
         #    anytype                 ret;
+        #    int                     retInt;
+        #    str                     retStr;
         #    System.Type             objectType;
         #    str                     objectTypeName;
         #    System.Byte[]           byteArray;
@@ -391,14 +401,17 @@ Formatversion: 1
         #
         #    setprefix(objectTypeName);
         #
-        #    if ( SysStructCLR::typeNameIsStruct( objectTypeName))
+        #    // Самые часто встречающиеся типы в верхней части ветвления
+        #    if ( objectTypeName == "System.String")
         #    {
-        #        ret = SysStructCLR::constructDictionary( object);
+        #        retStr  = object;
+        #        return retStr;
         #    }
         #    else
-        #    if ( SysDictionaryCLR::typeNameIsDictionary( objectTypeName))
+        #    if ( objectTypeName == "System.Int32")
         #    {
-        #        ret = SysDictionaryCLR::constructDictionary( object);
+        #        retInt  = object;
+        #        return retInt;
         #    }
         #    else
         #    // Массивы байтов извлекаем так чтобы потом их использовать для BinData.getData
@@ -407,6 +420,16 @@ Formatversion: 1
         #        byteArray       = object;
         #        base64String    = System.Convert::ToBase64String( byteArray);
         #        ret             = BinData::loadFromBase64( base64String);
+        #    }
+        #    else
+        #    if ( SysStructCLR::typeNameIsStruct( objectTypeName))
+        #    {
+        #        ret = SysStructCLR::constructDictionary( object);
+        #    }
+        #    else
+        #    if ( SysDictionaryCLR::typeNameIsDictionary( objectTypeName))
+        #    {
+        #        ret = SysDictionaryCLR::constructDictionary( object);
         #    }
         #    else
         #    {
@@ -450,21 +473,30 @@ Formatversion: 1
         #protected System.Object getObjectForAnyType(anytype item)
         #{
         #    System.Object       clrObject;
-        #    SysICollectionCLR   collectionCLR;
-        #    SysIDictionaryCLR   dictCLR;
-        #    SysList             sysList;
-        #    SysSet              sysSet;
+        #    System.String       stringObject;
+        #    System.Int32        intObject;
         #    ClassId             classId;
         #    SysDictClass        sysDictClass;
-        #    anytype             struct;
-        #    Types               itemType;
+        #    Types               paramType;
         #    BinData             binData;
         #;
-        #    itemType    = typeof(item);
+        #    paramType    = typeof(item);
         #
-        #    setprefix( strfmt("%1",itemType));
+        #    setprefix( strfmt("%1",paramType));
         #
-        #    if ( itemType == Types::Class)
+        #    if ( paramType == Types::String)
+        #    {
+        #        stringObject    = item;
+        #        return stringObject;
+        #    }
+        #    else
+        #    if ( paramType == Types::Integer)
+        #    {
+        #        intObject    = item;
+        #        return intObject;
+        #    }
+        #    else
+        #    if ( paramType == Types::Class)
         #    {
         #        classId = classidget(item);
         #        switch ( classId)
@@ -472,16 +504,8 @@ Formatversion: 1
         #            case classnum(CLRObject):
         #                clrObject   = item;
         #                break;
-        #            case classnum(SysList):
-        #                sysList     = item;
-        #                clrObject   = SysListCLR::constructFromList( sysList.list()).collection();
-        #                break;
         #            case classnum(List):
         #                clrObject   = SysListCLR::constructFromList( item).collection();
-        #                break;
-        #            case classnum(SysSet):
-        #                sysSet      = item;
-        #                clrObject   = SysListCLR::constructFromSet( sysSet.set()).collection();
         #                break;
         #            case classnum(Set):
         #                clrObject   = SysListCLR::constructFromSet( item).collection();
@@ -490,42 +514,33 @@ Formatversion: 1
         #                clrObject   = SysStructCLR::constructFromStruct( item).dictionary();
         #                break;
         #            default:
-        #                if ( SysDictClass::isEqualOrSuperclass( classId, classnum(SysICollectionCLR)))
+        #                if ( this.classIdHasMethod( classId, "struct"))
         #                {
-        #                    collectionCLR   = item;
-        #                    clrObject       = collectionCLR.collection();
-        #                }
-        #                else
-        #                if ( SysDictClass::isEqualOrSuperclass( classId, classnum(SysIDictionaryCLR)))
-        #                {
-        #                    dictCLR     = item;
-        #                    clrObject   = dictCLR.dictionary();
+        #                    clrObject   = this.getObjectForAnyType( new DictClass(classId).callObject( "struct", item));
         #                }
         #                else
         #                {
         #                    sysDictClass    = new SysDictClass(classId);
-        #                    if ( sysDictClass.hasObjectMethod("struct"))
-        #                    {
-        #                        struct      = sysDictClass.callObject( "struct", item);
-        #                        clrObject   = this.getObjectForAnyType( struct);
-        #                    }
-        #                    else
         #                    if ( sysDictClass.isImplementing(classnum(Enumerable)))
         #                    {
         #                        clrObject   = SysListCLR::constructFromEnumerable( item).collection();
+        #                    }
+        #                    else
+        #                    {
+        #                        throw Error( strfmt( "Не определены правила преобразования объекта класса %1 в ClrObject. Обратитесь в AxaptaSupport.", sysDictClass.name()));
         #                    }
         #                }
         #                break;
         #        }
         #    }
         #    else
-        #    if ( itemType == Types::Enum)
+        #    if ( paramType == Types::Enum)
         #    {
         #        clrObject   = CLRInterop::getObjectForAnyType( enum2int(item));
         #    }
         #    else
         #    // Данные из binData.getData
-        #    if ( itemType == Types::Container
+        #    if ( paramType == Types::Container
         #      && conlen( item) == 1
         #      && typeof(conpeek( item, 1)) == Types::BLOB )
         #    {
@@ -547,10 +562,7 @@ Formatversion: 1
         #    new InteropPermission(InteropKind::ClrInterop).assert();
         #
         #    return SysICollectionCLR::constructCollection(
-        #        SysCLRReflection::getPropertyValue(
-        #            dictionary
-        #          , "Keys"
-        #        )
+        #        dictionary.get_Keys()
         #    );
         #}
       ENDSOURCE
@@ -566,29 +578,6 @@ Formatversion: 1
         #    dictionary = _dictionary;
         #}
       ENDSOURCE
-      SOURCE #params
-        #protected Array params(
-        #    System.Object _parameter1
-        #  , System.Object _parameter2 = null
-        #  , System.Object _parameter3 = null
-        #)
-        #{
-        #    Array   params;
-        #;
-        #    params  = new Array(Types::Class);
-        #    params.value( 1, _parameter1);
-        #    if ( !prmisdefault(_parameter2))
-        #    {
-        #        params.value( 2, _parameter2);
-        #    }
-        #    if ( !prmisdefault(_parameter3))
-        #    {
-        #        params.value( 3, _parameter3);
-        #    }
-        #
-        #    return params;
-        #}
-      ENDSOURCE
       SOURCE #struct
         #anytype struct()
         #{
@@ -601,10 +590,7 @@ Formatversion: 1
         #    new InteropPermission(InteropKind::ClrInterop).assert();
         #
         #    return SysICollectionCLR::constructCollection(
-        #        SysCLRReflection::getPropertyValue(
-        #            dictionary
-        #          , "Values"
-        #        )
+        #        dictionary.get_Values()
         #    );
         #}
       ENDSOURCE
@@ -1098,6 +1084,15 @@ Formatversion: 1
         #{
         #}
       ENDSOURCE
+      SOURCE #current
+        #public anytype current()
+        #{
+        #    return KeyValuePair::construct(
+        #        this.currentKey()
+        #      , this.currentValue()
+        #    );
+        #}
+      ENDSOURCE
       SOURCE #currentKey
         #public str currentKey()
         #{
@@ -1107,7 +1102,10 @@ Formatversion: 1
       SOURCE #currentValue
         #public anytype currentValue()
         #{
-        #    return super();
+        #    int idx = this.currentIdx();
+        #    anytype ret = this.base().valueIndex(idx);
+        #
+        #    return ret;
         #}
       ENDSOURCE
       SOURCE #construct
@@ -1281,6 +1279,370 @@ Formatversion: 1
 
 ***Element: CLS
 
+; Microsoft Dynamics AX Class: SysHashtableCLR выгружен
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #SysHashtableCLR
+    PROPERTIES
+      Name                #SysHashtableCLR
+      Extends             #
+      RunOn               #Called from
+    ENDPROPERTIES
+    
+    METHODS
+      Version: 3
+      SOURCE #Add
+        #SysHashtableCLR Add(
+        #    str     key
+        #  , anytype value
+        #)
+        #{
+        #    InteropPermission   perm = new InteropPermission(InteropKind::ClrInterop);
+        #;
+        #    perm.assert();
+        #
+        #    hashTable.Add( this.getObjectForAnyType(key), this.getObjectForAnyType(value));
+        #
+        #    CodeAccessPermission::revertAssert();
+        #
+        #    return this;
+        #}
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #/// <summary>
+        #/// Обертка для класса System.Collections.Generic.IDictionary<TKey,TValue> , реализующая интерфейс IDictionary
+        #///
+        #/// Варианты инициализации :
+        #///    - на основе ранее созданного System.Collections.Generic.IDictionary<TKey,TValue>
+        #///         SysIDictionaryCLR::constructCollection( collection)
+        #///
+        #/// </summary>
+        #/// <remarks>
+        #///
+        #/// </remarks>
+        #class SysHashtableCLR implements IStruct
+        #{
+        #    System.Collections.Hashtable    hashTable;
+        #    /*
+        #    // Тип словаря
+        #    System.Type                     dictionaryType;
+        #    str                             dictionaryTypeName;
+        #    // Тип ключа коллекции
+        #    System.Type                     keyType;
+        #    str                             keyTypeName;
+        #    // Тип значения коллекции
+        #    System.Type                     valueType;
+        #    str                             valueTypeName;
+        #    */
+        #}
+      ENDSOURCE
+      SOURCE #classIdHasMethod
+        ##define.classIdHasMethodKey("classIdHasMethodKey")
+        #protected boolean classIdHasMethod(
+        #    int     _classId
+        #  , str     _methodName
+        #)
+        #{
+        #    SysGlobalCache  globalCache = appl.globalCache();
+        #    str             key;
+        #    boolean         ret;
+        #;
+        #    key = #classIdHasMethodKey + "_" + int2str(_classId) + "_" + _methodName;
+        #
+        #    if ( !globalCache.isSet("", key))
+        #    {
+        #        ret = new SysDictClass(_classId).hasObjectMethod(_methodName);
+        #
+        #        globalCache.set( "", key, ret);
+        #    }
+        #    else
+        #        ret = globalCache.get( "", key);
+        #
+        #    return ret;
+        #}
+      ENDSOURCE
+      SOURCE #ContainsKey
+        #boolean ContainsKey(str key)
+        #{
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    return hashTable.ContainsKey( this.getObjectForAnyType(key));
+        #}
+      ENDSOURCE
+      SOURCE #Count
+        #int Count()
+        #{
+        #    int ret;
+        #;
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    ret = hashTable.get_Count();
+        #
+        #    return ret;
+        #}
+      ENDSOURCE
+      SOURCE #getAnytypeForObject
+        #protected anytype getAnytypeForObject(System.Object object)
+        #{
+        #    anytype                 ret;
+        #    int                     retInt;
+        #    str                     retStr;
+        #    System.Type             objectType;
+        #    str                     objectTypeName;
+        #    System.Byte[]           byteArray;
+        #    str                     base64String;
+        #;
+        #    objectType      = object.GetType();
+        #    objectTypeName  = objectType.ToString();
+        #
+        #    setprefix(objectTypeName);
+        #
+        #    // Самые часто встречающиеся типы в верхней части ветвления
+        #    if ( objectTypeName == "System.String")
+        #    {
+        #        retStr  = object;
+        #        return retStr;
+        #    }
+        #    else
+        #    if ( objectTypeName == "System.Int32")
+        #    {
+        #        retInt  = object;
+        #        return retInt;
+        #    }
+        #    else
+        #    // Массивы байтов извлекаем так чтобы потом их использовать для BinData.getData
+        #    if ( objectTypeName == "System.Byte[]")
+        #    {
+        #        byteArray       = object;
+        #        base64String    = System.Convert::ToBase64String( byteArray);
+        #        ret             = BinData::loadFromBase64( base64String);
+        #    }
+        #    else
+        #    if ( SysStructCLR::typeNameIsStruct( objectTypeName))
+        #    {
+        #        ret = SysStructCLR::constructDictionary( object);
+        #    }
+        #    else
+        #    if ( SysDictionaryCLR::typeNameIsDictionary( objectTypeName))
+        #    {
+        #        ret = SysDictionaryCLR::constructDictionary( object);
+        #    }
+        #    else
+        #    {
+        #        ret = CLRInterop::getAnyTypeForObject(object);
+        #    }
+        #
+        #    return ret;
+        #}
+      ENDSOURCE
+      SOURCE #GetEnumerator
+        #IEnumeratorKeyValuePair GetEnumerator()
+        #{
+        #    return SysEnumerator_IDictionary::construct( hashTable);
+        #}
+      ENDSOURCE
+      SOURCE #getObjectForAnyType
+        #protected System.Object getObjectForAnyType(anytype item)
+        #{
+        #    System.Object       clrObject;
+        #    System.String       stringObject;
+        #    System.Int32        intObject;
+        #    ClassId             classId;
+        #    SysDictClass        sysDictClass;
+        #    Types               paramType;
+        #    BinData             binData;
+        #;
+        #    paramType    = typeof(item);
+        #
+        #    setprefix( strfmt("%1",paramType));
+        #
+        #    if ( paramType == Types::String)
+        #    {
+        #        stringObject    = item;
+        #        return stringObject;
+        #    }
+        #    else
+        #    if ( paramType == Types::Integer)
+        #    {
+        #        intObject    = item;
+        #        return intObject;
+        #    }
+        #    else
+        #    if ( paramType == Types::Class)
+        #    {
+        #        classId = classidget(item);
+        #        switch ( classId)
+        #        {
+        #            case classnum(CLRObject):
+        #                clrObject   = item;
+        #                break;
+        #            case classnum(List):
+        #                clrObject   = SysListCLR::constructFromList( item).collection();
+        #                break;
+        #            case classnum(Set):
+        #                clrObject   = SysListCLR::constructFromSet( item).collection();
+        #                break;
+        #            case classnum(Struct):
+        #                clrObject   = SysStructCLR::constructFromStruct( item).dictionary();
+        #                break;
+        #            default:
+        #                if ( this.classIdHasMethod( classId, "struct"))
+        #                {
+        #                    clrObject   = this.getObjectForAnyType( new DictClass(classId).callObject( "struct", item));
+        #                }
+        #                else
+        #                {
+        #                    sysDictClass    = new SysDictClass(classId);
+        #                    if ( sysDictClass.isImplementing(classnum(Enumerable)))
+        #                    {
+        #                        clrObject   = SysListCLR::constructFromEnumerable( item).collection();
+        #                    }
+        #                    else
+        #                    {
+        #                        throw Error( strfmt( "Не определены правила преобразования объекта класса %1 в ClrObject. Обратитесь в AxaptaSupport.", sysDictClass.name()));
+        #                    }
+        #                }
+        #                break;
+        #        }
+        #    }
+        #    else
+        #    if ( paramType == Types::Enum)
+        #    {
+        #        clrObject   = CLRInterop::getObjectForAnyType( enum2int(item));
+        #    }
+        #    else
+        #    // Данные из binData.getData
+        #    if ( paramType == Types::Container
+        #      && conlen( item) == 1
+        #      && typeof(conpeek( item, 1)) == Types::BLOB )
+        #    {
+        #        binData     = new BinData();
+        #        binData.setData( item);
+        #        clrObject   = System.Convert::FromBase64String( binData.base64Encode());
+        #    }
+        #    else
+        #    if ( paramType == Types::String)
+        #    {
+        #        stringObject    = item;
+        #        return stringObject;
+        #    }
+        #    else
+        #    if ( paramType == Types::Integer)
+        #    {
+        #        intObject    = item;
+        #        return intObject;
+        #    }
+        #    else
+        #    {
+        #        clrObject   = CLRInterop::getObjectForAnyType( item);
+        #    }
+        #
+        #    return clrObject;
+        #}
+      ENDSOURCE
+      SOURCE #hashTable
+        #System.Collections.Hashtable hashTable()
+        #{
+        #    return hashTable;
+        #}
+      ENDSOURCE
+      SOURCE #Item
+        #anytype Item(
+        #    str key
+        #)
+        #{
+        #    System.Object   retClr;
+        #;
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    retClr = hashTable.get_Item( this.getObjectForAnyType(key));
+        #
+        #    return this.getAnytypeForObject( retClr);
+        #}
+      ENDSOURCE
+      SOURCE #Keys
+        #SysICollectionCLR Keys()
+        #{
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    return SysICollectionCLR::constructCollection(
+        #        hashTable.get_Keys()
+        #    );
+        #}
+      ENDSOURCE
+      SOURCE #new
+        #void new( System.Collections.Hashtable _hashTable)
+        #{
+        #;
+        #    if ( CLRInterop::isNull(_hashTable))
+        #        throw Error(strfmt("В функцию %1 не передан параметр _hashTable!", funcname()));
+        #
+        #    hashTable = _hashTable;
+        #}
+      ENDSOURCE
+      SOURCE #Remove
+        #SysHashtableCLR Remove(
+        #    str key
+        #)
+        #{
+        #;
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    hashTable.Remove( this.getObjectForAnyType( key));
+        #
+        #    return this;
+        #}
+      ENDSOURCE
+      SOURCE #struct
+        #anytype struct()
+        #{
+        #    return this.hashTable();
+        #}
+      ENDSOURCE
+      SOURCE #Values
+        #SysICollectionCLR Values()
+        #{
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    return SysICollectionCLR::constructCollection(
+        #        hashTable.get_Values()
+        #    );
+        #}
+      ENDSOURCE
+      SOURCE #construct
+        #static SysHashtableCLR construct()
+        #{
+        #    SysHashtableCLR    ret;
+        #;
+        #    new InteropPermission( InteropKind::ClrInterop).assert();
+        #
+        #    ret = new SysHashtableCLR( new System.Collections.Hashtable());
+        #
+        #    return ret;
+        #}
+      ENDSOURCE
+      SOURCE #constructHashtable
+        #static SysHashtableCLR constructHashtable(
+        #    System.Collections.Hashtable _hashtable
+        #)
+        #{
+        #    new InteropPermission( InteropKind::ClrInterop).assert();
+        #
+        #    return new SysHashtableCLR(_hashtable);
+        #}
+      ENDSOURCE
+      SOURCE #typeNameIsHashtable
+        #static boolean typeNameIsHashtable( str _typeName)
+        #{
+        #    return _typeName == "System.Collections.Hashtable" ;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: CLS
+
 ; Microsoft Dynamics AX Class: SysEnumerator_IDictionary выгружен
 ; --------------------------------------------------------------------------------
   CLSVERSION 1
@@ -1310,6 +1672,7 @@ Formatversion: 1
         #    System.Type         objectType;
         #    str                 objectTypeName;
         #    SysRegex            regex;
+        #    System.Collections.DictionaryEntry  dictEntry;
         #;
         #    Debug::assert(perm != null);
         #    perm.assert();
@@ -1318,12 +1681,21 @@ Formatversion: 1
         #    objectType      = clrObject.GetType();
         #    objectTypeName  = CLRInterop::getAnyTypeForObject(objectType.ToString());
         #
-        #    regex           = SysRegex::construct("System.Collections.Generic.KeyValuePair`2\\[(.+),(.+)\\]");
-        #    if ( !regex.isMatch(objectTypeName))
-        #        throw Error( strfmt("В класс SysEnumerator_IDictionary передана коллекция с неверным типом элементов - %1", objectTypeName));
+        #    if ( objectTypeName == "System.Collections.DictionaryEntry")
+        #    {
+        #        dictEntry   = clrObject;
+        #        key         = this.getAnytypeForObject( dictEntry.get_Key());
+        #        value       = this.getAnytypeForObject( dictEntry.get_Value());
+        #    }
+        #    else
+        #    {
+        #        regex           = SysRegex::construct("System.Collections.Generic.KeyValuePair`2\\[(.+),(.+)\\]");
+        #        if ( !regex.isMatch(objectTypeName))
+        #            throw Error( strfmt("В класс SysEnumerator_IDictionary передана коллекция с неверным типом элементов - %1", objectTypeName));
         #
-        #    key     = this.getAnytypeForObject( SysCLRReflection::getPropertyValue( clrObject, "Key"));
-        #    value   = this.getAnytypeForObject( SysCLRReflection::getPropertyValue( clrObject, "Value"));
+        #        key     = this.getAnytypeForObject( SysCLRReflection::getPropertyValue( clrObject, "Key"));
+        #        value   = this.getAnytypeForObject( SysCLRReflection::getPropertyValue( clrObject, "Value"));
+        #    }
         #
         #    return KeyValuePair::construct( key, value);
         #}
@@ -1714,6 +2086,7 @@ Formatversion: 1
         #{
         #    IEnumeratorKeyValuePair enumerator;
         #    int                     i;
+        #    KeyValuePair            keyValue;
         #;
         #    this.constructType(Types::Integer,Types::String);
         #    sysDict.Add(10,"10");
@@ -1724,6 +2097,7 @@ Formatversion: 1
         #
         #    while (enumerator.moveNext())
         #    {
+        #        keyValue    = enumerator.current();
         #        i++;
         #    }
         #    this.assertEquals( 2, i);
@@ -1914,10 +2288,11 @@ Formatversion: 1
         #{
         #    IEnumeratorKeyValuePair enumerator;
         #    int                     i;
+        #    KeyValuePair            keyValue;
         #;
         #    this.construct();
-        #    sysDict.Add("10","10");
-        #    sysDict.Add("20","20");
+        #    sysDict.Add("10","11");
+        #    sysDict.Add("20","22");
         #
         #    enumerator  = sysDict.GetEnumerator();
         #    this.assertNotNull( enumerator);
@@ -1925,6 +2300,17 @@ Formatversion: 1
         #    while (enumerator.moveNext())
         #    {
         #        i++;
+        #        keyValue    = enumerator.current();
+        #        if (i==1)
+        #        {
+        #            this.assertEquals( "10", keyValue.key());
+        #            this.assertEquals( "11", keyValue.value());
+        #        }
+        #        if (i==2)
+        #        {
+        #            this.assertEquals( "20", keyValue.key());
+        #            this.assertEquals( "22", keyValue.value());
+        #        }
         #    }
         #    this.assertEquals( 2, i);
         #}
@@ -2068,10 +2454,11 @@ Formatversion: 1
         #{
         #    IEnumeratorKeyValuePair enumerator;
         #    int                     i;
+        #    KeyValuePair            keyValue;
         #;
         #    this.construct();
-        #    sysDict.Add("10","10");
-        #    sysDict.Add("20","20");
+        #    sysDict.Add("10","11");
+        #    sysDict.Add("20","22");
         #
         #    enumerator  = sysDict.GetEnumerator();
         #    this.assertNotNull( enumerator);
@@ -2079,6 +2466,17 @@ Formatversion: 1
         #    while (enumerator.moveNext())
         #    {
         #        i++;
+        #        keyValue    = enumerator.current();
+        #        if (i==1)
+        #        {
+        #            this.assertEquals( "10", keyValue.key());
+        #            this.assertEquals( "11", keyValue.value());
+        #        }
+        #        if (i==2)
+        #        {
+        #            this.assertEquals( "20", keyValue.key());
+        #            this.assertEquals( "22", keyValue.value());
+        #        }
         #    }
         #    this.assertEquals( 2, i);
         #}
@@ -2131,6 +2529,209 @@ Formatversion: 1
         #    this.construct();
         #
         #    this.assertTrue( SysStructCLR::typeNameIsStruct( sysDict.dictionaryTypeName()));
+        #}
+      ENDSOURCE
+      SOURCE #testValues
+        #void testValues()
+        #{
+        #    ICollection      sysSet;
+        #;
+        #    this.construct();
+        #
+        #    sysDict.Add( "10", "10");
+        #    sysDict.Add( "20", "20");
+        #
+        #    sysSet  = sysDict.Values();
+        #
+        #    this.assertNotNull( sysSet);
+        #    this.assertEquals( 2, sysSet.Count());
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: SysHashtableCLRTest выгружен
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #SysHashtableCLRTest
+    PROPERTIES
+      Name                #SysHashtableCLRTest
+      Extends             #SysTestCase
+      RunOn               #Server
+    ENDPROPERTIES
+    
+    METHODS
+      Version: 3
+      SOURCE #classDeclaration
+        #class SysHashtableCLRTest extends SysTestCase
+        #{
+        #    SysHashtableCLR     sysDict;
+        #}
+      ENDSOURCE
+      SOURCE #construct
+        #protected void construct()
+        #{
+        #;
+        #    sysDict  = SysHashtableCLR::construct();
+        #}
+      ENDSOURCE
+      SOURCE #testAdd
+        #void testAdd()
+        #{
+        #;
+        #    this.construct();
+        #
+        #    sysDict.Add( "10", "01");
+        #    this.assertEquals( 1, sysDict.Count());
+        #    sysDict.Add( "20", "02");
+        #    this.assertEquals( 2, sysDict.Count());
+        #    sysDict.Add( "30"
+        #               , SysHashtableCLR::construct()
+        #                    .Add( "param1", 500)
+        #                    .Add( "param2", 600)
+        #               );
+        #    this.assertEquals( 3, sysDict.Count());
+        #    sysDict.Add( "40"
+        #               , SysListCLR::constructType( Types::String)
+        #                    .Add( "param1")
+        #                    .Add( "param2")
+        #               );
+        #    this.assertEquals( 4, sysDict.Count());
+        #    sysDict.Add( "50"
+        #               , SysListCLR::constructType( Types::Class)
+        #                    .Add( SysHashtableCLR::construct()
+        #                            .Add( "itemid", "test")
+        #                            .Add( "price", 1000)
+        #                        )
+        #                    .Add( SysHashtableCLR::construct()
+        #                            .Add( "itemid", "test2")
+        #                            .Add( "price", 1500)
+        #                        )
+        #               );
+        #    this.assertEquals( 5, sysDict.Count());
+        #}
+      ENDSOURCE
+      SOURCE #testConstruct
+        #void testConstruct()
+        #{
+        #;
+        #    this.construct();
+        #    this.assertNotNull(sysDict);
+        #}
+      ENDSOURCE
+      SOURCE #testContainsKey
+        #void testContainsKey()
+        #{
+        #;
+        #    this.construct();
+        #    sysDict.Add("10", "10");
+        #    sysDict.Add("20", "20");
+        #
+        #    this.assertTrue( sysDict.ContainsKey("20"));
+        #    this.assertFalse( sysDict.ContainsKey("30"));
+        #}
+      ENDSOURCE
+      SOURCE #testCount
+        #void testCount()
+        #{
+        #;
+        #    this.construct();
+        #    this.assertEquals( 0, sysDict.Count());
+        #
+        #    sysDict.Add( "10", "10");
+        #    this.assertEquals( 1, sysDict.Count());
+        #}
+      ENDSOURCE
+      SOURCE #testGetEnumerator
+        #void testGetEnumerator()
+        #{
+        #    IEnumeratorKeyValuePair enumerator;
+        #    int                     i;
+        #    KeyValuePair            keyValue;
+        #;
+        #    this.construct();
+        #    sysDict.Add("10","11");
+        #    sysDict.Add("20","22");
+        #
+        #    enumerator  = sysDict.GetEnumerator();
+        #    this.assertNotNull( enumerator);
+        #
+        #    while (enumerator.moveNext())
+        #    {
+        #        i++;
+        #        keyValue    = enumerator.current();
+        #        if (i==1)
+        #        {
+        #            this.assertEquals( "20", keyValue.key());
+        #            this.assertEquals( "22", keyValue.value());
+        #        }
+        #        if (i==2)
+        #        {
+        #            this.assertEquals( "10", keyValue.key());
+        #            this.assertEquals( "11", keyValue.value());
+        #        }
+        #    }
+        #    this.assertEquals( 2, i);
+        #}
+      ENDSOURCE
+      SOURCE #testItem
+        #void testItem()
+        #{
+        #;
+        #    this.construct();
+        #
+        #    sysDict.Add( "10", "20");
+        #    this.assertEquals( "20", sysDict.Item("10"));
+        #}
+      ENDSOURCE
+      SOURCE #testKeys
+        #void testKeys()
+        #{
+        #    ICollection      sysSet;
+        #;
+        #    this.construct();
+        #
+        #    sysDict.Add( "10", "10");
+        #    sysDict.Add( "20", "20");
+        #
+        #    sysSet  = sysDict.Keys();
+        #
+        #    this.assertNotNull( sysSet);
+        #    this.assertEquals( 2, sysSet.Count());
+        #}
+      ENDSOURCE
+      SOURCE #testRemove
+        #void testRemove()
+        #{
+        #;
+        #    this.construct();
+        #    sysDict.Add("10", "10");
+        #    this.assertEquals( 1, sysDict.Count());
+        #    sysDict.Add("20", "10");
+        #    this.assertEquals( 2, sysDict.Count());
+        #    sysDict.Remove("30");
+        #    this.assertEquals( 2, sysDict.Count());
+        #    sysDict.Remove("20");
+        #    this.assertEquals( 1, sysDict.Count());
+        #}
+      ENDSOURCE
+      SOURCE #testTypeNameIsHashtable
+        #void testTypeNameIsHashtable()
+        #{
+        #    System.Type                     clrType;
+        #    System.Collections.Hashtable    dict;
+        #;
+        #    this.construct();
+        #
+        #    new InteropPermission( InteropKind::ClrInterop).assert();
+        #
+        #    dict    = sysDict.hashTable();
+        #    clrType = dict.GetType();
+        #
+        #    this.assertTrue( SysHashtableCLR::typeNameIsHashtable( clrType.ToString()));
         #}
       ENDSOURCE
       SOURCE #testValues
@@ -2232,6 +2833,13 @@ Formatversion: 1
       BEGINNODE
         FILETYPE 0
         UTILTYPE 45
+        UTILOBJECTID 41932
+        NODETYPE 329
+        NAME #SysHashtableCLR
+      ENDNODE
+      BEGINNODE
+        FILETYPE 0
+        UTILTYPE 45
         UTILOBJECTID 41913
         NODETYPE 329
         NAME #SysEnumerator_IDictionary
@@ -2287,6 +2895,13 @@ Formatversion: 1
         UTILOBJECTID 41898
         NODETYPE 329
         NAME #SysStructCLRTest
+      ENDNODE
+      BEGINNODE
+        FILETYPE 0
+        UTILTYPE 45
+        UTILOBJECTID 41933
+        NODETYPE 329
+        NAME #SysHashtableCLRTest
       ENDNODE
       ENDGROUP
       
