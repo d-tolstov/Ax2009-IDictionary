@@ -24,6 +24,20 @@ Formatversion: 1
         #{
         #}
       ENDSOURCE
+      SOURCE #Any
+        #/// <summary>
+        #/// Проверяет существование хотя бы одного элемента в коллекции
+        #/// </summary>
+        #/// <returns>
+        #/// true если хотя бы один элемент в коллекции есть
+        #/// </returns>
+        #/// <remarks>
+        #///
+        #/// </remarks>
+        #boolean Any()
+        #{
+        #}
+      ENDSOURCE
       SOURCE #classDeclaration
         #interface IDictionary extends Enumerable
         #{
@@ -111,6 +125,12 @@ Formatversion: 1
         #;
         #    this.map().insert( key, value);
         #    return this;
+        #}
+      ENDSOURCE
+      SOURCE #Any
+        #boolean Any()
+        #{
+        #    return !this.map().empty();
         #}
       ENDSOURCE
       SOURCE #classDeclaration
@@ -276,6 +296,17 @@ Formatversion: 1
         #    return this.getAnytypeForObject( ret);
         #}
       ENDSOURCE
+      SOURCE #_ItemCLR
+        #protected System.Object _ItemCLR(
+        #    anytype key
+        #)
+        #{
+        #;
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    return dictionary.get_Item( this.getObjectForAnyType(key));
+        #}
+      ENDSOURCE
       SOURCE #_Remove
         #protected SysIDictionaryCLR _Remove(
         #    anytype key
@@ -287,6 +318,27 @@ Formatversion: 1
         #    dictionary.Remove( this.getObjectForAnyType(key));
         #
         #    return this;
+        #}
+      ENDSOURCE
+      SOURCE #Any
+        #boolean Any()
+        #{
+        #    anytype         ret;
+        #    System.Boolean  retCLR;
+        #;
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    retCLR = SysCLRReflection::invokeStaticGenericType(
+        #        SysICollectionCLR::SystemLinqEnumerableType()
+        #      , "Any"
+        #      , this.getItemType()
+        #      , SysCLRReflection::getArray( this.dictionary())
+        #      , true
+        #    );
+        #
+        #    ret = CLRInterop::getAnyTypeForObject(retCLR);
+        #
+        #    return ret;
         #}
       ENDSOURCE
       SOURCE #classDeclaration
@@ -396,10 +448,43 @@ Formatversion: 1
         #    return SysEnumerator_IDictionary::construct( dictionary);
         #}
       ENDSOURCE
+      SOURCE #getItemType
+        #protected System.Type getItemType()
+        #{
+        #    System.Object                   enumerator;
+        #    System.Type                     typeObject;
+        #    System.Reflection.PropertyInfo  propertyObject;
+        #    System.Type                     itemTypeObject;
+        #;
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    enumerator      = dictionary.GetEnumerator();
+        #    typeObject      = enumerator.GetType();
+        #    propertyObject  = typeObject.GetProperty("Current");
+        #    itemTypeObject  = propertyObject.get_PropertyType();
+        #    return itemTypeObject;
+        #}
+      ENDSOURCE
       SOURCE #getObjectForAnyType
         #protected System.Object getObjectForAnyType(anytype item)
         #{
         #    return ICollectionStatic::getObjectForAnyType( item);
+        #}
+      ENDSOURCE
+      SOURCE #getValueType
+        #protected System.Type getValueType()
+        #{
+        #    System.Object                   object = this.dictionary();
+        #    System.Type                     typeObject;
+        #    System.Reflection.PropertyInfo  propertyObject;
+        #    System.Type                     itemTypeObject;
+        #;
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    typeObject      = object.GetType();
+        #    propertyObject  = typeObject.GetProperty("Item");
+        #    itemTypeObject  = propertyObject.get_PropertyType();
+        #    return itemTypeObject;
         #}
       ENDSOURCE
       SOURCE #Keys
@@ -510,6 +595,12 @@ Formatversion: 1
         #SysDictionaryCLR Add(anytype key, anytype value)
         #{
         #    return this._Add( key, value);
+        #}
+      ENDSOURCE
+      SOURCE #Any
+        #boolean Any()
+        #{
+        #    return super();
         #}
       ENDSOURCE
       SOURCE #classDeclaration
@@ -695,6 +786,20 @@ Formatversion: 1
         #{
         #}
       ENDSOURCE
+      SOURCE #Any
+        #/// <summary>
+        #/// Проверяет существование хотя бы одного элемента в коллекции
+        #/// </summary>
+        #/// <returns>
+        #/// true если хотя бы один элемент в коллекции есть
+        #/// </returns>
+        #/// <remarks>
+        #///
+        #/// </remarks>
+        #boolean Any()
+        #{
+        #}
+      ENDSOURCE
       SOURCE #classDeclaration
         #interface IStruct extends Enumerable
         #{
@@ -766,6 +871,12 @@ Formatversion: 1
         #)
         #{
         #    return this.With( key, value);
+        #}
+      ENDSOURCE
+      SOURCE #Any
+        #boolean Any()
+        #{
+        #    return this.Count() != 0;
         #}
       ENDSOURCE
       SOURCE #classDeclaration
@@ -986,6 +1097,12 @@ Formatversion: 1
         #    return this._Add( key, value);
         #}
       ENDSOURCE
+      SOURCE #Any
+        #boolean Any()
+        #{
+        #    return super();
+        #}
+      ENDSOURCE
       SOURCE #classDeclaration
         #class SysStructCLR extends SysIDictionaryCLR implements IStruct
         #{
@@ -1155,6 +1272,12 @@ Formatversion: 1
         #    return this;
         #}
       ENDSOURCE
+      SOURCE #Any
+        #boolean Any()
+        #{
+        #    return this.Count() != 0;
+        #}
+      ENDSOURCE
       SOURCE #classDeclaration
         #/// <summary>
         #/// Обертка для класса System.Collections.Generic.IDictionary<TKey,TValue> , реализующая интерфейс IDictionary
@@ -1213,6 +1336,23 @@ Formatversion: 1
         #IEnumeratorKeyValuePair GetEnumerator()
         #{
         #    return SysEnumerator_IDictionary::construct( hashTable);
+        #}
+      ENDSOURCE
+      SOURCE #getItemType
+        #protected System.Type getItemType()
+        #{
+        #    System.Object                   enumerator;
+        #    System.Type                     typeObject;
+        #    System.Reflection.PropertyInfo  propertyObject;
+        #    System.Type                     itemTypeObject;
+        #;
+        #    new InteropPermission(InteropKind::ClrInterop).assert();
+        #
+        #    enumerator      = hashTable.GetEnumerator();
+        #    typeObject      = enumerator.GetType();
+        #    propertyObject  = typeObject.GetProperty("Entry");
+        #    itemTypeObject  = propertyObject.get_PropertyType();
+        #    return itemTypeObject;
         #}
       ENDSOURCE
       SOURCE #getObjectForAnyType
@@ -1550,6 +1690,17 @@ Formatversion: 1
         #    this.assertEquals( 2, sysMap.Count());
         #}
       ENDSOURCE
+      SOURCE #testAny
+        #void testAny()
+        #{
+        #;
+        #    this.constructType( Types::Integer, Types::String);
+        #    this.assertEquals( false, sysMap.Any());
+        #
+        #    sysMap.Add(10,"--");
+        #    this.assertEquals( true, sysMap.Any());
+        #}
+      ENDSOURCE
       SOURCE #testConstructMap
         #void testConstructMap()
         #{
@@ -1720,6 +1871,17 @@ Formatversion: 1
         #    this.assertEquals( 1, sysDict.Count());
         #    sysDict.Add( 20, "02");
         #    this.assertEquals( 2, sysDict.Count());
+        #}
+      ENDSOURCE
+      SOURCE #testAny
+        #void testAny()
+        #{
+        #;
+        #    this.constructType( Types::Integer, Types::String);
+        #    this.assertEquals( false, sysDict.Any());
+        #
+        #    sysDict.Add( 10, "--");
+        #    this.assertEquals( true, sysDict.Any());
         #}
       ENDSOURCE
       SOURCE #testConstructType
@@ -1923,13 +2085,24 @@ Formatversion: 1
         #;
         #    this.construct();
         #
-        #    sysDict.Add( "10", SysList::constructType());
+        #    sysDict.Add( "10", SysList::constructType( Types::Class));
         #    ICollectionStatic::construct( sysDict.Item("10"))
         #    .Add(800);
         #    ICollectionStatic::construct( sysDict.Item("10"))
         #    .Add(systemdateget());
         #
         #    this.assertEquals( 2, ICollectionStatic::construct( sysDict.Item("10")).Count());
+        #}
+      ENDSOURCE
+      SOURCE #testAny
+        #void testAny()
+        #{
+        #;
+        #    this.construct();
+        #    this.assertEquals( false, sysDict.Any());
+        #
+        #    sysDict.Add("01","--");
+        #    this.assertEquals( true, sysDict.Any());
         #}
       ENDSOURCE
       SOURCE #testConstruct
@@ -2096,6 +2269,17 @@ Formatversion: 1
         #                        )
         #               );
         #    this.assertEquals( 5, sysDict.Count());
+        #}
+      ENDSOURCE
+      SOURCE #testAny
+        #void testAny()
+        #{
+        #;
+        #    this.construct();
+        #    this.assertEquals( false, sysDict.Any());
+        #
+        #    sysDict.Add("01","--");
+        #    this.assertEquals( true, sysDict.Any());
         #}
       ENDSOURCE
       SOURCE #testConstruct
@@ -2292,6 +2476,17 @@ Formatversion: 1
         #                        )
         #               );
         #    this.assertEquals( 5, sysDict.Count());
+        #}
+      ENDSOURCE
+      SOURCE #testAny
+        #void testAny()
+        #{
+        #;
+        #    this.construct();
+        #    this.assertEquals( false, sysDict.Any());
+        #
+        #    sysDict.Add("01","--");
+        #    this.assertEquals( true, sysDict.Any());
         #}
       ENDSOURCE
       SOURCE #testConstruct
